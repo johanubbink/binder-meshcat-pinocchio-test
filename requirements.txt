@@ -1,2 +1,2 @@
-pin==2.6.3
+example-robot-data==3.10.0
 meshcat==0.3.1
