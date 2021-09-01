@@ -1,18 +1,15 @@
 import numpy as np
-from IPython.display import HTML, display, Javascript
-
-from pinocchio.visualize.meshcat_visualizer import MeshcatVisualizer
-from meshcat.path import Path
-from meshcat.commands import SetObject, SetTransform, Delete, SetProperty, SetAnimation
+from IPython.display import HTML, Javascript, display
+from meshcat.commands import Delete, SetAnimation, SetObject, SetProperty, SetTransform
 from meshcat.geometry import Geometry
+from meshcat.path import Path
+from pinocchio.visualize.meshcat_visualizer import MeshcatVisualizer
 
-DIV = """
+MESH, CAT = ("""
 <div id="meshcat-pane" style="height: 400px; width: 100%; overflow-x: auto; overflow-y: hidden; resize:
 both">
 </div>
-"""
-
-SCRIPT = """
+""", """
 require.config({
   paths: {
       MeshCat: '//aen.im/meshcat'
@@ -26,23 +23,31 @@ require(["MeshCat"], function(MeshCat) {
         viewer.handle_command(msg.content.data)
     });
 })
-"""
+""")
 
 URL = "https://aen.im/example-robot-data/robots"
 
 
 class JupyterVisualizer:
+    """
+    This is mostly a copy-paste from @RussTedrake's https://github.com/rdeits/meshcat-python/pull/74.
+
+    Changes include:
+    - removed iframe
+    - split meshcat inclusion into HTML() & Javascript()
+    - host meshcat somewhere in HTTPS with "Access-Control-Allow-Origin: *"
+    - use requirejs to get it (requirejs is already embedded in jupyter notebooks)
+    - initialize communication from the client instead of the server
+    - removed parts related to colab
+    """
     __slots__ = ["path", "channel"]
 
     def __init__(self, write_html=True):
         self.path = Path(("meshcat", ))
         self.channel = None
         if write_html:
-            self.jupyter_cell()
-
-    def jupyter_cell(self):
-        display(HTML(DIV), Javascript(SCRIPT))
-        get_ipython().kernel.comm_manager.register_target('meshcat', self.set_meshcat_channel)
+            display(HTML(MESH), Javascript(CAT))
+            get_ipython().kernel.comm_manager.register_target('meshcat', self.set_meshcat_channel)
 
     def set_meshcat_channel(self, comm_, open_msg):
         self.channel = comm_
@@ -77,15 +82,24 @@ class JupyterVisualizer:
 
 
 class URLMeshGeometry(Geometry):
+    """Geometry subclass where the mesh is provided by URL.
+
+    Require the client to know how to fetch it:
+    https://github.com/nim65s/meshcat/tree/topic/fetch
+    """
     def __init__(self, url):
         super().__init__()
-        self.url = URL + url.split("example-robot-data/robots")[-1]
+        self.url = url
 
     def lower(self, object_data):
         return {"type": "_meshfile_geometry", "uuid": self.uuid, "url": self.url, "format": self.url[-3:].lower()}
 
 
 class PinocchioJupyterVisualizer(MeshcatVisualizer):
+    """MeshcatVisualizer subclass that use JupyterVisualizer and initialize it by default
+
+    It also provide meshes from example-robot-data by URL.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.initViewer()
@@ -94,4 +108,6 @@ class PinocchioJupyterVisualizer(MeshcatVisualizer):
         super().initViewer(viewer or JupyterVisualizer())
 
     def loadMesh(self, geometry_object):
-        return URLMeshGeometry(geometry_object.meshPath)
+        if "example-robot-data/robots" in geometry_object.meshPath:
+            return URLMeshGeometry(URL + geometry_object.meshPath.split("example-robot-data/robots")[-1])
+        return super().loadMesh(geometry_object)
