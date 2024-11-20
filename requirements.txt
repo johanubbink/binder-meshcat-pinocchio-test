@@ -1,2 +1,2 @@
-example-robot-data==3.10.0
-meshcat==0.3.1
+example-robot-data
+meshcat
