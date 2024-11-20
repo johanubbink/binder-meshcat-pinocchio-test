@@ -1,2 +1,2 @@
 example-robot-data
-meshcat
+meshcat>=0.3.1
